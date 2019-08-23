@@ -16,7 +16,7 @@ post ; [Public] Run this entry point if you don't want to download the code.
  ;
  ; Load the URLs
  D LOADHAND
- ; 
+ ;
  ; Set the home directory for the server
  N % S %=$$HOMEDIR
  I '% QUIT
@@ -24,6 +24,14 @@ post ; [Public] Run this entry point if you don't want to download the code.
  ; Set start port
  N PORT S PORT=$$PORT()
  I PORT=0 QUIT
+ S ^%webhttp(0,"port")=PORT
+ ;
+ ; Set CORS config
+ N CORS S CORS=$$CORS()
+ S ^%webhttp(0,"cors")=CORS
+ ;
+ ; Set Other execution parameters
+ D OTHERCONF()
  ;
  ; Start Server
  D job^%webreq(PORT)
@@ -314,7 +322,7 @@ TESTD47(DIR) ; $$ ; Can I write to this directory in GT.M?
  QUIT 1
  ;
 TESTDET ; Open File Error handler
- S $EC="" 
+ S $EC=""
  QUIT 0
  ;
  ; Load URL handlers
@@ -400,6 +408,65 @@ PORTOKER ; Error handler for open port
  I $ES QUIT
  S $EC=""
  QUIT 0
+ ;
+CORS() ; $$; set CORS configuration
+ N CORS
+ S CORS("enabled")="N"
+ N TMP
+ F  D  Q:CORS
+ . R !,"Do you want to enable CORS: Y// ",TMP:30
+ . I (TMP="Y")!(TMP="N") S CORS("enabled")=TMP Q
+ I CORS("enabled")'="Y" Q:CORS
+ N TMP
+ N TMPORG
+ F  D  Q:CORS
+ . R !,"Access Control Allowed Origin: // ",TMP:30
+ . I TMP'="" D
+ . . S TMPORG=$G(TMPORG)_TMP_","
+ . N TMP
+ . R !,"Add more origins: Y// ",TMP:30
+ . I TMP="N" Q
+ S CORS("origin")=$E(TMPORG,0,$L(TMPORG)-1) ; Remove trailing comma
+ N TMP
+ F  D  Q:CORS
+ . R !,"Access Control Allow Credentials: true/false// ",TMP:30
+ . I (TMP="true")!(TMP="false") S CORS("credentials")=TMP Q
+ N TMP
+ N TMPMTH
+ F  D  Q:CORS
+ . R !,"Access Control Allowed Method: POST/PUT/GET/DELETE/OPTIONS// ",TMP:30
+ . I (TMP="POST")!(TMP="PUT")!(TMP="GET")!(TMP="DELETE")!(TMP="OPTIONS") D
+ . . S TMPMTH=$G(TMPMTH)_TMP_","
+ . N TMP
+ . R !,"Add more methods: Y// ",TMP:30
+ . I TMP="N" Q
+ S CORS("method")=$E(TMPMTH,0,$L(TMPMTH)-1)
+ N TMP
+ N TMPHDR
+ F  D  Q:CORS
+ . R !,"Access Control Allowed Header: // ",TMP:30
+ . I TMP'="" D
+ . . S TMPHDR=$G(TMPHDR)_TMP_","
+ . N TMP
+ . R !,"Add more headers: Y// ",TMP:30
+ . I TMP="N" Q
+ S CORS("header")=$E(TMPHDR,0,$L(TMPHDR)-1)
+ Q CORS
+ ;
+OTHERCONF ; Set server execution parameters
+ N TMP
+ R !,"Set a Pre Execution Function: Y/N// ",TMP:30
+ I TMP="Y" D
+ . N TMP
+ . R !,"Pre Execution Function Name: // ",TMP:30
+ . I TMP'="" S ^%webhttp(0,"preexecfunc")=TMP
+ N TMP
+ R !,"Pass Http response as first argument to your routines: Y/N// ",TMP:30
+ I (TMP="Y")!(TMP="N") S ^%webhttp(0,"firstargresponse")=TMP
+ N TMP
+ R !,"Auto serialize responses as JSON: Y/N// ",TMP:30
+ I (TMP="Y")!(TMP="N") S ^%webhttp(0,"autoserresptojson")=TMP
+ Q
  ;
 uninstallMWS ; Remove MWS completely
  if $data(^DD) do

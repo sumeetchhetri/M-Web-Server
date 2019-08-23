@@ -8,7 +8,10 @@ RESPOND ; find entry point to handle request and call it
  K:'$G(NOGBL) ^TMP($J)
  N ROUTINE,LOCATION,HTTPARGS,HTTPBODY,PARAMS,AUTHNODE
  I HTTPREQ("path")="/",HTTPREQ("method")="GET" D en^%webhome(.HTTPRSP) QUIT  ; Home page requested.
- I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always repond to OPTIONS to give CORS header info
+ I $G(^%webhttp(0,"preexecfunc"),"")'="" D
+ . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ)"
+ . D @r K r Q:+$D(HTTPRSP)
+ I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always respond to OPTIONS to give CORS header info
  ;
  ; Resolve the URL and authenticate if necessary
  D MATCH(.ROUTINE,.HTTPARGS,.PARAMS,.AUTHNODE)
@@ -19,10 +22,17 @@ RESPOND ; find entry point to handle request and call it
  ; Split the query string
  D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
  ;
+ ; If method is PUT/POST and content-type is
+ new formParams
+ if "PUT,POST"[HTTPREQ("method")&$get(HTTPREQ("header","content-type"))="application/x-www-form-urlencoded" D
+ . if BODY($order(BODY(0)))="" set HTTPERR=400 quit
+ . new concatBody set concatBody=$$BODYASSTR(.BODY)
+ . do QSPLIT(concatBody,.formParams)
+ ;
  ; %WNULL Support for VistA - Use this device to prevent VistA from writing to you.
  N %WNULL S %WNULL=""
  I $P($SY,",")=47 S %WNULL="/dev/null"
- I $L($SY,":")=2 D
+ I $L($SY,",")=2 D
  . I $ZVERSION(1)=2 s %WNULL="//./nul"
  . I $ZVERSION(1)=3 s %WNULL="/dev/null"
  I %WNULL="" S $EC=",U-OS-NOT-SUPPORTED,"
@@ -35,8 +45,16 @@ RESPOND ; find entry point to handle request and call it
  ;
  ; No parameters, do it the original way
  if '$D(PARAMS) D
- . if "PUT,POST"[HTTPREQ("method") set r=ROUTINE_"(.HTTPARGS,.BODY,.HTTPRSP)"
- . else  set r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ . if "PUT,POST"[HTTPREQ("method") D
+ . . s order=0 f s order=$O(formParams(order)) quit:'order D
+ . . . S HTTPARGS(order)=formParams(order)
+ . . I $G(^%webhttp(0,"firstargresponse"),"Y")=="Y" D
+ . . . set r=ROUTINE_"(.HTTPRSP,.HTTPARGS,.BODY)"
+ . . E set r=ROUTINE_"(.HTTPARGS,.HTTPRSP,.BODY)"
+ . else D
+ . . I $G(^%webhttp(0,"firstargresponse"),"Y")=="Y" D
+ . . . set r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ . . E set r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
  ;
  ;
  ; Parameters, do it the new way
@@ -55,10 +73,6 @@ RESPOND ; find entry point to handle request and call it
  .. set @("a"_order)=$get(HTTPREQ("header",name))
  .. set r=r_var_","
  . if type="F" do  ; application/x-www-form-urlencoded form
- .. if BODY($order(BODY(0)))="" set HTTPERR=400 quit
- .. if $get(HTTPREQ("header","content-type"))'="application/x-www-form-urlencoded" set HTTPERR=400 quit
- .. new concatBody set concatBody=$$BODYASSTR(.BODY)
- .. new formParams do QSPLIT(concatBody,.formParams)
  .. set @var=$g(formParams(name))
  .. set r=r_var_","
  . if type="B" do  ; whole body
@@ -69,6 +83,16 @@ RESPOND ; find entry point to handle request and call it
  ;
  if "PUT,POST"[HTTPREQ("method") xecute "S LOCATION=$$"_r if 1
  else  do @r
+ ;
+ ; if setting for json serialization is enabled then perform auto json serialization for response object
+ I ^%webhttp(0,"autoserresptojson")=="Y" D
+ . N TMPHTTPR S TMPHTTPR=HTTPRSP("_http")
+ . K HTTPRSP("_http")
+ . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
+ . K HTTPRSP M HTTPRSP=TMPHTTPRSP
+ . S HTTPRSP("mime")="application/json; charset=utf-8"
+ . s order=0 f s order=$O(TMPHTTPR(order)) quit:'order D
+ . . HTTPRSP(order)=TMPHTTPR(order)
  ;
  if $get(LOCATION)'="" do
  . S HTTPREQ("location")=$S($D(HTTPREQ("header","host")):HTTPREQ("header","host")_LOCATION,1:LOCATION)
@@ -273,10 +297,12 @@ SENDATA ; write out the data as an HTTP response
  E  D W("Content-Type: application/json; charset=utf-8"_$C(13,10))
  ;
  ; Add CORS Header
- I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Methods: OPTIONS, POST"_$C(13,10))
- I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Headers: Content-Type"_$C(13,10))
- I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Max-Age: 86400"_$C(13,10))
- D W("Access-Control-Allow-Origin: *"_$C(13,10))
+ I ^%webhttp(0,"cors","enabled")="Y" D
+ . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Credentials: "_^%webhttp(0,"cors","credentials")_$C(13,10))
+ . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Methods: "_^%webhttp(0,"cors","method")_$C(13,10))
+ . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Headers: "_^%webhttp(0,"cors","header")_$C(13,10))
+ . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Max-Age: 86400"_$C(13,10))
+ . D W("Access-Control-Allow-Origin: "_^%webhttp(0,"cors","origin")_$C(13,10))
  ;
  I $P($SY,",")=47,$G(HTTPREQ("header","accept-encoding"))["gzip" GOTO GZIP  ; If on GT.M, and we can zip, let's do that!
  ;
