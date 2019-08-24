@@ -8,7 +8,10 @@ RESPOND ; find entry point to handle request and call it
  K:'$G(NOGBL) ^TMP($J)
  N ROUTINE,LOCATION,HTTPARGS,HTTPBODY,PARAMS,AUTHNODE
  I HTTPREQ("path")="/",HTTPREQ("method")="GET" D en^%webhome(.HTTPRSP) QUIT  ; Home page requested.
- I $G(^%webhttp(0,"preexecfunc"),"")'="" D
+ ;
+ ; Hook for execution of any pre-hook functions that need to be executed before the server starts
+ ; processing the web request
+ I ('$G(NOGBL))&$G(^%webhttp(0,"preexecfunc"),"")'="" D
  . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ)"
  . D @r K r Q:+$D(HTTPRSP)
  I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always respond to OPTIONS to give CORS header info
@@ -22,12 +25,13 @@ RESPOND ; find entry point to handle request and call it
  ; Split the query string
  D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
  ;
- ; If method is PUT/POST and content-type is
- new formParams
- if "PUT,POST"[HTTPREQ("method")&$get(HTTPREQ("header","content-type"))="application/x-www-form-urlencoded" D
- . if BODY($order(BODY(0)))="" set HTTPERR=400 quit
- . new concatBody set concatBody=$$BODYASSTR(.BODY)
- . do QSPLIT(concatBody,.formParams)
+ ; If method is PUT/POST and we have URL encoded form data then we need to extract the form parameters
+ ; and store them in HTTPARGS, this has been moved out here as this extraction needs to happen only once
+ ; earlier this extraction process was getting repeated per form parameter definition leading to a performance issue
+ N FORMPARAMS
+ I "PUT,POST"[HTTPREQ("method")&$G(HTTPREQ("header","content-type"))="application/x-www-form-urlencoded"&BODY($order(BODY(0)))'="" D
+ . N CONCATBODY S CONCATBODY=$$BODYASSTR(.BODY)
+ . D QSPLIT(CONCATBODY,.FORMPARAMS)
  ;
  ; %WNULL Support for VistA - Use this device to prevent VistA from writing to you.
  N %WNULL S %WNULL=""
@@ -41,63 +45,65 @@ RESPOND ; find entry point to handle request and call it
  N BODY M BODY=HTTPREQ("body") K HTTPREQ("body")
  ;
  ; r will contain the routine to execute
- n r,order
+ N r,order
  ;
  ; No parameters, do it the original way
- if '$D(PARAMS) D
- . if "PUT,POST"[HTTPREQ("method") D
- . . s order=0 f s order=$O(formParams(order)) quit:'order D
- . . . S HTTPARGS(order)=formParams(order)
- . . I $G(^%webhttp(0,"firstargresponse"),"Y")=="Y" D
- . . . set r=ROUTINE_"(.HTTPRSP,.HTTPARGS,.BODY)"
- . . E set r=ROUTINE_"(.HTTPARGS,.HTTPRSP,.BODY)"
- . else D
- . . I $G(^%webhttp(0,"firstargresponse"),"Y")=="Y" D
- . . . set r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
- . . E set r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
+ I '$D(PARAMS) D
+ . I "PUT,POST"[HTTPREQ("method") D
+ . . S order=0 F S order=$O(FORMPARAMS(order)) Q:'order D
+ . . . S HTTPARGS(order)=FORMPARAMS(order)
+ ; Check whether we need to pass HTTPRSP as first argument to thr routine or HTTPARGS
+ . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"),"Y")="Y" D
+ . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS,.BODY)"
+ . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP,.BODY)"
+ . E  D
+ . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"),"Y")="Y" D
+ . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
  ;
  ;
  ; Parameters, do it the new way
- else  s r=ROUTINE_"(.HTTPRSP," f order=0:0 s order=$O(PARAMS(order)) quit:'order  new @("a"_order) do  quit:$get(HTTPERR)
+ E  S r=ROUTINE_"(.HTTPRSP," F order=0:0 S order=$O(PARAMS(order)) Q:'order  N @("a"_order) D  Q:$G(HTTPERR)
  . ; PARAMS(0)="^17.60012S^1^1"
  . ; PARAMS(1,0)="U^rpc"
  . ;
  . ; Set arguments into variables
- . n type s type=$p(PARAMS(order,0),"^",1)
- . n name s name=$p(PARAMS(order,0),"^",2)
- . n var  s var="a"_order
- . if type="U"!(type="Q") do  ; URL component or HTTP GET Query parameter
- .. set @var=$get(HTTPARGS(name))
- .. set r=r_var_","
- . if type="H" do  ; HTTP Header
- .. set @("a"_order)=$get(HTTPREQ("header",name))
- .. set r=r_var_","
- . if type="F" do  ; application/x-www-form-urlencoded form
- .. set @var=$g(formParams(name))
- .. set r=r_var_","
- . if type="B" do  ; whole body
- .. set r=r_".BODY"_","
+ . N type S type=$p(PARAMS(order,0),"^",1)
+ . N name S name=$p(PARAMS(order,0),"^",2)
+ . N var  S var="a"_order
+ . I type="U"!(type="Q") D  ; URL component or HTTP GET Query parameter
+ .. S @var=$G(HTTPARGS(name))
+ .. S r=r_var_","
+ . I type="H" D  ; HTTP Header
+ .. S @("a"_order)=$G(HTTPREQ("header",name))
+ .. S r=r_var_","
+ . I type="F" D  ; application/x-www-form-urlencoded form
+ .. S @var=$g(FORMPARAMS(name))
+ .. S r=r_var_","
+ . I type="B" D  ; whole body
+ .. S r=r_".BODY"_","
  . ;
  . ; replace trailing comma with close paran
- if $extract(r,$l(r))="," set $extract(r,$l(r))=")"
+ I $E(r,$L(r))="," S $E(r,$L(r))=")"
  ;
- if "PUT,POST"[HTTPREQ("method") xecute "S LOCATION=$$"_r if 1
- else  do @r
+ I "PUT,POST"[HTTPREQ("method") xecute "S LOCATION=$$"_r if 1
+ E  D @r
  ;
  ; if setting for json serialization is enabled then perform auto json serialization for response object
- I ^%webhttp(0,"autoserresptojson")=="Y" D
+ I ('$G(NOGBL))&^%webhttp(0,"autoserresptojson")="Y" D
+ ; Check whether we have http response status code or any other http headers present in the special _http key
  . N TMPHTTPR S TMPHTTPR=HTTPRSP("_http")
  . K HTTPRSP("_http")
  . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
  . K HTTPRSP M HTTPRSP=TMPHTTPRSP
  . S HTTPRSP("mime")="application/json; charset=utf-8"
- . s order=0 f s order=$O(TMPHTTPR(order)) quit:'order D
+ . S order=0 f S order=$O(TMPHTTPR(order)) Q:'order D
  . . HTTPRSP(order)=TMPHTTPR(order)
  ;
- if $get(LOCATION)'="" do
+ I $G(LOCATION)'="" D
  . S HTTPREQ("location")=$S($D(HTTPREQ("header","host")):HTTPREQ("header","host")_LOCATION,1:LOCATION)
- . if $get(TLSCONFIG)'="" set HTTPREQ("location")="https://"_HTTPREQ("location")
- . else                   set HTTPREQ("location")="http://"_HTTPREQ("location")
+ . I $G(TLSCONFIG)'="" set HTTPREQ("location")="https://"_HTTPREQ("location")
+ . E                   set HTTPREQ("location")="http://"_HTTPREQ("location")
  ;
  ; Back to our original device
  C %WNULL U %WTCP
@@ -264,7 +270,7 @@ MATCHFS(ROUTINE) ; Match against the file system
  N ARGS S ARGS("*")=$E(HTTPREQ("path"),2,9999)
  D FILESYS^%webapi(.HTTPRSP,.ARGS)
  I $O(HTTPRSP(0)) S ROUTINE="FILESYS^%webapi"
- quit
+ Q
  ;
 SENDATA ; write out the data as an HTTP response
  ; expects HTTPERR to contain the HTTP error code, if any
@@ -296,8 +302,8 @@ SENDATA ; write out the data as an HTTP response
  . D W("Content-Type: "_HTTPRSP("mime")_$C(13,10)) K HTTPRSP("mime") ; Mime-type
  E  D W("Content-Type: application/json; charset=utf-8"_$C(13,10))
  ;
- ; Add CORS Header
- I ^%webhttp(0,"cors","enabled")="Y" D
+ ; Add CORS Headers
+ I $G(NOGBL)!^%webhttp(0,"cors","enabled")="Y" D
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Credentials: "_^%webhttp(0,"cors","credentials")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Methods: "_^%webhttp(0,"cors","method")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Headers: "_^%webhttp(0,"cors","header")_$C(13,10))
@@ -350,11 +356,11 @@ GZIP ; EP to write gzipped content
  ;
  ; zip away - Open gzip and write to it, then read back the zipped file.
  N OLDIO S OLDIO=$IO
- n file
- i $ZV["Linux" s file="/dev/shm/mws-"_$J_"-"_$R(999999)_".dat"
- e  s file="/tmp/mws-"_$J_"-"_$R(999999)_".dat"
- o file:(newversion:stream:nowrap:chset="M")
- u file
+ N file
+ I $ZV["Linux" s file="/dev/shm/mws-"_$J_"-"_$R(999999)_".dat"
+ E  s file="/tmp/mws-"_$J_"-"_$R(999999)_".dat"
+ O file:(newversion:stream:nowrap:chset="M")
+ U file
  ;
  ; Write out data
  N I,J
@@ -366,16 +372,16 @@ GZIP ; EP to write gzipped content
  . I $D(@HTTPRSP)>1 S I=0 F  S I=$O(@HTTPRSP@(I)) Q:'I  W @HTTPRSP@(I)
  ;
  ; Close
- c file
+ C file
  ;
  O "D":(shell="/bin/sh":command="gzip "_file:parse):0:"pipe"
  U "D" C "D"
  ;
- n ZIPPED
- o file_".gz":(readonly:fixed:nowrap:recordsize=255:chset="M"):0
- u file_".gz"
- n i f i=1:1 read ZIPPED(i):0  q:$zeof
- U OLDIO c file_".gz":delete
+ N ZIPPED
+ O file_".gz":(readonly:fixed:nowrap:recordsize=255:chset="M"):0
+ U file_".gz"
+ N i F i=1:1 R ZIPPED(i):0  Q:$zeof
+ U OLDIO C file_".gz":delete
  ;
  ; Calculate new size (reset SIZE first)
  S SIZE=0

@@ -413,42 +413,42 @@ CORS() ; $$; set CORS configuration
  N CORS
  S CORS("enabled")="N"
  N TMP
- F  D  Q:CORS
- . R !,"Do you want to enable CORS: Y// ",TMP:30
+ F  D  Q
+ . R !,"Do you want to enable CORS: Y/N// ",TMP:30
  . I (TMP="Y")!(TMP="N") S CORS("enabled")=TMP Q
- I CORS("enabled")'="Y" Q:CORS
+ I CORS("enabled")="N" Q:CORS
  N TMP
  N TMPORG
- F  D  Q:CORS
+ F  D  Q
  . R !,"Access Control Allowed Origin: // ",TMP:30
  . I TMP'="" D
  . . S TMPORG=$G(TMPORG)_TMP_","
  . N TMP
- . R !,"Add more origins: Y// ",TMP:30
+ . R !,"Add more origins: Y/N// ",TMP:30
  . I TMP="N" Q
  S CORS("origin")=$E(TMPORG,0,$L(TMPORG)-1) ; Remove trailing comma
  N TMP
- F  D  Q:CORS
+ F  D  Q
  . R !,"Access Control Allow Credentials: true/false// ",TMP:30
  . I (TMP="true")!(TMP="false") S CORS("credentials")=TMP Q
  N TMP
  N TMPMTH
- F  D  Q:CORS
+ F  D  Q
  . R !,"Access Control Allowed Method: POST/PUT/GET/DELETE/OPTIONS// ",TMP:30
  . I (TMP="POST")!(TMP="PUT")!(TMP="GET")!(TMP="DELETE")!(TMP="OPTIONS") D
  . . S TMPMTH=$G(TMPMTH)_TMP_","
  . N TMP
- . R !,"Add more methods: Y// ",TMP:30
+ . R !,"Add more methods: Y/N// ",TMP:30
  . I TMP="N" Q
  S CORS("method")=$E(TMPMTH,0,$L(TMPMTH)-1)
  N TMP
  N TMPHDR
- F  D  Q:CORS
+ F  D  Q
  . R !,"Access Control Allowed Header: // ",TMP:30
  . I TMP'="" D
  . . S TMPHDR=$G(TMPHDR)_TMP_","
  . N TMP
- . R !,"Add more headers: Y// ",TMP:30
+ . R !,"Add more headers: Y/N// ",TMP:30
  . I TMP="N" Q
  S CORS("header")=$E(TMPHDR,0,$L(TMPHDR)-1)
  Q CORS
