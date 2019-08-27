@@ -453,7 +453,7 @@ CORS() ; $$; set CORS configuration
  S CORS("header")=$E(TMPHDR,0,$L(TMPHDR)-1)
  Q CORS
  ;
-OTHERCONF ; Set server execution parameters
+OTHERCONF() ; Set server execution parameters
  N TMP
  R !,"Set a Pre Execution Function: Y/N// ",TMP:30
  I TMP="Y" D

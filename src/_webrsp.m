@@ -7,20 +7,6 @@ RESPOND ; find entry point to handle request and call it
  ;
  K:'$G(NOGBL) ^TMP($J)
  N ROUTINE,LOCATION,HTTPARGS,HTTPBODY,PARAMS,AUTHNODE
- I HTTPREQ("path")="/",HTTPREQ("method")="GET" D en^%webhome(.HTTPRSP) QUIT  ; Home page requested.
- ;
- ; Hook for execution of any pre-hook functions that need to be executed before the server starts
- ; processing the web request
- I ('$G(NOGBL))&$G(^%webhttp(0,"preexecfunc"),"")'="" D
- . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ)"
- . D @r K r Q:+$D(HTTPRSP)
- I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always respond to OPTIONS to give CORS header info
- ;
- ; Resolve the URL and authenticate if necessary
- D MATCH(.ROUTINE,.HTTPARGS,.PARAMS,.AUTHNODE)
- ;
- I $G(HTTPERR)    QUIT  ; Error in matching
- I $O(HTTPRSP(0)) QUIT  ; File on file system found matching path
  ;
  ; Split the query string
  D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
@@ -33,10 +19,31 @@ RESPOND ; find entry point to handle request and call it
  . N CONCATBODY S CONCATBODY=$$BODYASSTR(.BODY)
  . D QSPLIT(CONCATBODY,.FORMPARAMS)
  ;
+ ; Hook for execution of any pre-hook functions that need to be executed before the server starts
+ ; processing the web request
+ I ('$G(NOGBL))&$G(^%webhttp(0,"preexecfunc"))'="" D
+ . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ,.HTTPARGS,.FORMPARAMS)"
+ . D @r K r
+ I $D(HTTPRSP) D
+ . I ('$G(NOGBL))&$G(^%webhttp(0,"autoserresptojson"))="Y" D
+ . . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
+ . . K HTTPRSP M HTTPRSP=TMPHTTPRSP
+ . . S HTTPRSP("mime")="application/json; charset=utf-8"
+ Q:$D(HTTPRSP)
+ I HTTPREQ("path")="/",HTTPREQ("method")="GET" D en^%webhome(.HTTPRSP) QUIT  ; Home page requested.
+ ;
+ I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always respond to OPTIONS to give CORS header info
+ ;
+ ; Resolve the URL and authenticate if necessary
+ D MATCH(.ROUTINE,.HTTPARGS,.PARAMS,.AUTHNODE)
+ ;
+ I $G(HTTPERR)    QUIT  ; Error in matching
+ I $O(HTTPRSP(0)) QUIT  ; File on file system found matching path
+ ;
  ; %WNULL Support for VistA - Use this device to prevent VistA from writing to you.
  N %WNULL S %WNULL=""
  I $P($SY,",")=47 S %WNULL="/dev/null"
- I $L($SY,",")=2 D
+ I $P($SY,",")=2 D
  . I $ZVERSION(1)=2 s %WNULL="//./nul"
  . I $ZVERSION(1)=3 s %WNULL="/dev/null"
  I %WNULL="" S $EC=",U-OS-NOT-SUPPORTED,"
@@ -52,12 +59,12 @@ RESPOND ; find entry point to handle request and call it
  . I "PUT,POST"[HTTPREQ("method") D
  . . S order=0 F S order=$O(FORMPARAMS(order)) Q:'order D
  . . . S HTTPARGS(order)=FORMPARAMS(order)
- ; Check whether we need to pass HTTPRSP as first argument to thr routine or HTTPARGS
- . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"),"Y")="Y" D
+ . . ; Check whether we need to pass HTTPRSP as first argument to thr routine or HTTPARGS
+ . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"))="Y" D
  . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS,.BODY)"
  . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP,.BODY)"
  . E  D
- . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"),"Y")="Y" D
+ . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"))="Y" D
  . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
  . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
  ;
@@ -90,9 +97,9 @@ RESPOND ; find entry point to handle request and call it
  E  D @r
  ;
  ; if setting for json serialization is enabled then perform auto json serialization for response object
- I ('$G(NOGBL))&^%webhttp(0,"autoserresptojson")="Y" D
- ; Check whether we have http response status code or any other http headers present in the special _http key
- . N TMPHTTPR S TMPHTTPR=HTTPRSP("_http")
+ I ('$G(NOGBL))&$G(^%webhttp(0,"autoserresptojson"))="Y" D
+ . ; Check whether we have http response status code or any other http headers present in the special _http key
+ . N TMPHTTPR M TMPHTTPR=HTTPRSP("_http")
  . K HTTPRSP("_http")
  . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
  . K HTTPRSP M HTTPRSP=TMPHTTPRSP
@@ -303,7 +310,7 @@ SENDATA ; write out the data as an HTTP response
  E  D W("Content-Type: application/json; charset=utf-8"_$C(13,10))
  ;
  ; Add CORS Headers
- I $G(NOGBL)!^%webhttp(0,"cors","enabled")="Y" D
+ I $G(NOGBL)!$G(^%webhttp(0,"cors","enabled"))="Y" D
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Credentials: "_^%webhttp(0,"cors","credentials")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Methods: "_^%webhttp(0,"cors","method")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Headers: "_^%webhttp(0,"cors","header")_$C(13,10))
