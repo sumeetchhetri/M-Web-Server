@@ -21,11 +21,11 @@ RESPOND ; find entry point to handle request and call it
  ;
  ; Hook for execution of any pre-hook functions that need to be executed before the server starts
  ; processing the web request
- I ('$G(NOGBL))&$G(^%webhttp(0,"preexecfunc"))'="" D
+ I ('$G(NOGBL))&($G(^%webhttp(0,"preexecfunc"))'="") D
  . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ,.HTTPARGS,.FORMPARAMS)"
  . D @r K r
  I $D(HTTPRSP) D
- . I ('$G(NOGBL))&$G(^%webhttp(0,"autoserresptojson"))="Y" D
+ . I ('$G(NOGBL))&($G(^%webhttp(0,"autoserresptojson"))="Y") D
  . . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
  . . K HTTPRSP M HTTPRSP=TMPHTTPRSP
  . . S HTTPRSP("mime")="application/json; charset=utf-8"
@@ -57,14 +57,14 @@ RESPOND ; find entry point to handle request and call it
  ; No parameters, do it the original way
  I '$D(PARAMS) D
  . I "PUT,POST"[HTTPREQ("method") D
- . . S order=0 F S order=$O(FORMPARAMS(order)) Q:'order D
+ . . S order=0 F  S order=$O(FORMPARAMS(order)) Q:'order  D
  . . . S HTTPARGS(order)=FORMPARAMS(order)
  . . ; Check whether we need to pass HTTPRSP as first argument to thr routine or HTTPARGS
- . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"))="Y" D
+ . . I ('$G(NOGBL))&($G(^%webhttp(0,"firstargresponse"))="Y") D
  . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS,.BODY)"
  . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP,.BODY)"
  . E  D
- . . I ('$G(NOGBL))&$G(^%webhttp(0,"firstargresponse"))="Y" D
+ . . I ('$G(NOGBL))&($G(^%webhttp(0,"firstargresponse"))="Y") D
  . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
  . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
  ;
@@ -94,18 +94,18 @@ RESPOND ; find entry point to handle request and call it
  I $E(r,$L(r))="," S $E(r,$L(r))=")"
  ;
  I "PUT,POST"[HTTPREQ("method") xecute "S LOCATION=$$"_r if 1
- E  D @r
+ E  xecute "S LOCATION="_r
  ;
  ; if setting for json serialization is enabled then perform auto json serialization for response object
- I ('$G(NOGBL))&$G(^%webhttp(0,"autoserresptojson"))="Y" D
+ I ('$G(NOGBL))&($G(^%webhttp(0,"autoserresptojson"))="Y") D
  . ; Check whether we have http response status code or any other http headers present in the special _http key
  . N TMPHTTPR M TMPHTTPR=HTTPRSP("_http")
  . K HTTPRSP("_http")
  . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
  . K HTTPRSP M HTTPRSP=TMPHTTPRSP
  . S HTTPRSP("mime")="application/json; charset=utf-8"
- . S order=0 f S order=$O(TMPHTTPR(order)) Q:'order D
- . . HTTPRSP(order)=TMPHTTPR(order)
+ . S order=0 F  S order=$O(TMPHTTPR(order)) Q:'order  D
+ . . S HTTPRSP(order)=TMPHTTPR(order)
  ;
  I $G(LOCATION)'="" D
  . S HTTPREQ("location")=$S($D(HTTPREQ("header","host")):HTTPREQ("header","host")_LOCATION,1:LOCATION)
@@ -310,7 +310,7 @@ SENDATA ; write out the data as an HTTP response
  E  D W("Content-Type: application/json; charset=utf-8"_$C(13,10))
  ;
  ; Add CORS Headers
- I $G(NOGBL)!$G(^%webhttp(0,"cors","enabled"))="Y" D
+ I $G(NOGBL)!($G(^%webhttp(0,"cors","enabled"))="Y") D
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Credentials: "_^%webhttp(0,"cors","credentials")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Methods: "_^%webhttp(0,"cors","method")_$C(13,10))
  . I $G(HTTPREQ("method"))="OPTIONS" D W("Access-Control-Allow-Headers: "_^%webhttp(0,"cors","header")_$C(13,10))

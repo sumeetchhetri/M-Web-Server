@@ -8,7 +8,7 @@ webinit ; OSE/SMH - Initialize Web Server;2019-08-12  4:56 PM
  DO CACHETLS
  ;
  ; Install the package
- D INSTALLRO("https://github.com/shabiel/M-Web-Server/releases/download/1.1.0/mws.rsa")
+ D INSTALLRO("https://github.com/shabiel/M-Web-Server/releases/download/1.1.0/mws.rsa)
  ;
  ; If fileman is installed, do an init for the %web(17.001 file
 post ; [Public] Run this entry point if you don't want to download the code.
@@ -24,11 +24,11 @@ post ; [Public] Run this entry point if you don't want to download the code.
  ; Set start port
  N PORT S PORT=$$PORT()
  I PORT=0 QUIT
+ K ^%webhttp(0)
  S ^%webhttp(0,"port")=PORT
  ;
  ; Set CORS config
- N CORS S CORS=$$CORS()
- S ^%webhttp(0,"cors")=CORS
+ D CORS()
  ;
  ; Set Other execution parameters
  D OTHERCONF()
@@ -410,48 +410,42 @@ PORTOKER ; Error handler for open port
  QUIT 0
  ;
 CORS() ; $$; set CORS configuration
- N CORS
- S CORS("enabled")="N"
+ S ^%webhttp(0,"cors","enabled")="N"
  N TMP
- F  D  Q
- . R !,"Do you want to enable CORS: Y/N// ",TMP:30
- . I (TMP="Y")!(TMP="N") S CORS("enabled")=TMP Q
- I CORS("enabled")="N" Q:CORS
- N TMP
+ R !,"Do you want to enable CORS: Y/N// ",TMP:30
+ I (TMP="Y")!(TMP="N") S ^%webhttp(0,"cors","enabled")=TMP
+ I ^%webhttp(0,"cors","enabled")="N" Q
  N TMPORG
- F  D  Q
- . R !,"Access Control Allowed Origin: // ",TMP:30
- . I TMP'="" D
- . . S TMPORG=$G(TMPORG)_TMP_","
- . N TMP
- . R !,"Add more origins: Y/N// ",TMP:30
- . I TMP="N" Q
- S CORS("origin")=$E(TMPORG,0,$L(TMPORG)-1) ; Remove trailing comma
+ACAO
  N TMP
- F  D  Q
- . R !,"Access Control Allow Credentials: true/false// ",TMP:30
- . I (TMP="true")!(TMP="false") S CORS("credentials")=TMP Q
+ R !,"Access Control Allowed Origin: // ",TMP:30
+ I TMP'="" S TMPORG=$G(TMPORG)_TMP_","
  N TMP
+ R !,"Add more origins: Y/N// ",TMP:30
+ I TMP="Y" GOTO ACAO
+ I '$G(TMPORG) S ^%webhttp(0,"cors","origin")=$E(TMPORG,0,$L(TMPORG)-1) ; Remove trailing comma
+ N TMP
+ R !,"Access Control Allow Credentials: true/false// ",TMP:30
+ I (TMP="true")!(TMP="false") S ^%webhttp(0,"cors","credentials")=TMP
  N TMPMTH
- F  D  Q
- . R !,"Access Control Allowed Method: POST/PUT/GET/DELETE/OPTIONS// ",TMP:30
- . I (TMP="POST")!(TMP="PUT")!(TMP="GET")!(TMP="DELETE")!(TMP="OPTIONS") D
- . . S TMPMTH=$G(TMPMTH)_TMP_","
- . N TMP
- . R !,"Add more methods: Y/N// ",TMP:30
- . I TMP="N" Q
- S CORS("method")=$E(TMPMTH,0,$L(TMPMTH)-1)
+ACAM
  N TMP
+ R !,"Access Control Allowed Method: POST/PUT/GET/DELETE/OPTIONS// ",TMP:30
+ I (TMP="POST")!(TMP="PUT")!(TMP="GET")!(TMP="DELETE")!(TMP="OPTIONS") S TMPMTH=$G(TMPMTH)_TMP_","
+ N TMP
+ R !,"Add more methods: Y/N// ",TMP:30
+ I TMP="Y" GOTO ACAM
+ I '$G(TMPMTH) S ^%webhttp(0,"cors","method")=$E(TMPMTH,0,$L(TMPMTH)-1)
  N TMPHDR
- F  D  Q
- . R !,"Access Control Allowed Header: // ",TMP:30
- . I TMP'="" D
- . . S TMPHDR=$G(TMPHDR)_TMP_","
- . N TMP
- . R !,"Add more headers: Y/N// ",TMP:30
- . I TMP="N" Q
- S CORS("header")=$E(TMPHDR,0,$L(TMPHDR)-1)
- Q CORS
+ACAH
+ N TMP
+ R !,"Access Control Allowed Header: // ",TMP:30
+ I TMP'="" S TMPHDR=$G(TMPHDR)_TMP_","
+ N TMP
+ R !,"Add more headers: Y/N// ",TMP:30
+ I TMP="Y" GOTO ACAH
+ I '$G(TMPHDR) S ^%webhttp(0,"cors","header")=$E(TMPHDR,0,$L(TMPHDR)-1)
+ Q
  ;
 OTHERCONF() ; Set server execution parameters
  N TMP
