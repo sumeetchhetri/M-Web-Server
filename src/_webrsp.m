@@ -7,6 +7,7 @@ RESPOND ; find entry point to handle request and call it
  ;
  K:'$G(NOGBL) ^TMP($J)
  N ROUTINE,LOCATION,HTTPARGS,HTTPBODY,PARAMS,AUTHNODE
+ N BODY I $D(HTTPREQ("body")) M BODY=HTTPREQ("body") K HTTPREQ("body")
  ;
  ; Split the query string
  D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
@@ -15,7 +16,7 @@ RESPOND ; find entry point to handle request and call it
  ; and store them in HTTPARGS, this has been moved out here as this extraction needs to happen only once
  ; earlier this extraction process was getting repeated per form parameter definition leading to a performance issue
  N FORMPARAMS
- I "PUT,POST"[HTTPREQ("method")&$G(HTTPREQ("header","content-type"))="application/x-www-form-urlencoded"&BODY($order(BODY(0)))'="" D
+ I ("PUT,POST"[HTTPREQ("method"))&($G(HTTPREQ("header","content-type"))="application/x-www-form-urlencoded")&(BODY($order(BODY(0)))'="") D
  . N CONCATBODY S CONCATBODY=$$BODYASSTR(.BODY)
  . D QSPLIT(CONCATBODY,.FORMPARAMS)
  ;
@@ -48,8 +49,6 @@ RESPOND ; find entry point to handle request and call it
  . I $ZVERSION(1)=3 s %WNULL="/dev/null"
  I %WNULL="" S $EC=",U-OS-NOT-SUPPORTED,"
  O %WNULL U %WNULL
- ;
- N BODY M BODY=HTTPREQ("body") K HTTPREQ("body")
  ;
  ; r will contain the routine to execute
  N r,order
