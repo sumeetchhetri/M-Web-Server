@@ -1,5 +1,6 @@
-%webjsonEncode ;SLC/KCM -- Encode JSON;Feb 07, 2019@11:01
+%webjsonEncode ;SLC/KCM -- Encode JSON;2019-11-14  9:06 AM
  ;
+encode(VVROOT,VVJSON,VVERR) G DIRECT
 ENCODE(VVROOT,VVJSON,VVERR) ; VVROOT (M structure) --> VVJSON (array of strings)
  ;
 DIRECT ; TAG for use by ENCODE^%webjson
@@ -14,7 +15,7 @@ DIRECT ; TAG for use by ENCODE^%webjson
  S VVERR=$G(VVERR,"^TMP(""%webjsonerr"",$J)")
  I '$L($G(VVROOT)) ; set error info
  I '$L($G(VVJSON)) ; set error info
- N VVLINE,VVMAX,VVERRORS
+ N VVLINE,VVMAX,VVSUB,VVERRORS
  ;
  ; V4W/DLW - Changed VVMAX from 4000 (just under the 4096 string size limit)
  ; to 100. With large data arrays, the JSON encoder could exhaust system
@@ -26,7 +27,13 @@ DIRECT ; TAG for use by ENCODE^%webjson
  ; PRE^%webjsonEncodeTest, WP^%webjsonEncodeTest, EXAMPLE^%webjsonEncodeTest
  S VVLINE=1,VVMAX=100,VVERRORS=0 ; limit document lines to 100 characters
  S @VVJSON@(VVLINE)=""
- D SEROBJ(VVROOT)
+ ; If first subscript is numeric, run array code and done
+ ; https://groups.google.com/d/msg/comp.lang.mumps/RcogxQKtkJw/lN7AzAVzBAAJ
+ S VVSUB=$O(@VVROOT@(""))
+ I +VVSUB=VVSUB D
+ . D SERARY(VVROOT)
+ E  D
+ . D SEROBJ(VVROOT)
  Q
  ;
 SEROBJ(VVROOT) ; Serialize into a JSON object

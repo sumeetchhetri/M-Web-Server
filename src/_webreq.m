@@ -1,4 +1,4 @@
-%webreq ;SLC/KCM -- Listen for HTTP requests;2019-08-13  2:04 PM
+%webreq ;SLC/KCM -- Listen for HTTP requests;2019-11-14  2:05 PM
  ;
  ; Listener Process ---------------------------------------
  ;
@@ -7,13 +7,13 @@ go ; start up REST listener with defaults
  D job(PORT)
  QUIT
  ;
-job(PORT,TLSCONFIG,NOGBL,USERPASS,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; Convenience entry point
+job(PORT,TLSCONFIG,NOGBL,USERPASS,NOGZIP,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; Convenience entry point
  I $L($G(USERPASS))&($G(USERPASS)'[":") W "USERPASS argument is invalid, must be in username:password format!" QUIT
- I $P($SY,",")=47 J start^%webreq(PORT,,$G(TLSCONFIG),$G(NOGBL),,$G(USERPASS),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(IN="/dev/null":OUT="/dev/null":ERR="webreq.mje"):5  ; no in and out files please.
- E  J start^%webreq(PORT,"",$G(TLSCONFIG),$G(NOGBL),"",$G(USERPASS),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)) ; Cache can't accept empty arguments. Change to empty strings.
+ I $P($SY,",")=47 J start^%webreq(PORT,,$G(TLSCONFIG),$G(NOGBL),,$G(USERPASS),$G(NOGZIP),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(IN="/dev/null":OUT="/dev/null":ERR="webreq.mje"):5  ; no in and out files please.
+ E  J start^%webreq(PORT,"",$G(TLSCONFIG),$G(NOGBL),"",$G(USERPASS),$G(NOGZIP),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)) ; Cache can't accept empty arguments. Change to empty strings.
  QUIT
  ;
-start(TCPPORT,DEBUG,TLSCONFIG,NOGBL,TRACE,USERPASS,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; set up listening for connections
+start(TCPPORT,DEBUG,TLSCONFIG,NOGBL,TRACE,USERPASS,NOGZIP,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; set up listening for connections
  ; I hope TCPPORT needs no explanations.
  ;
  ; DEBUG is so that we run our server in the foreground.
@@ -62,7 +62,7 @@ LOOP ; wait for connection, spawn process to handle it. GOTO favorite.
  I %WOS="CACHE" D  G LOOP
  . R *X:10
  . E  QUIT  ; Loop back again when listening and nobody on the line
- . J CHILD($G(TLSCONFIG),$G(NOGBL),$G(TRACE),$G(USERPASS),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(:4:TCPIO:TCPIO):10 ; Send off the device to another job for input and output.
+ . J CHILD($G(TLSCONFIG),$G(NOGBL),$G(TRACE),$G(USERPASS),$G(NOGZIP),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(:4:TCPIO:TCPIO):10 ; Send off the device to another job for input and output.
  . i $ZA\8196#2=1 W *-2  ; job failed to clear bit
  ; ---- END CACHE CODE ----
  ;
@@ -86,7 +86,7 @@ LOOP ; wait for connection, spawn process to handle it. GOTO favorite.
  . . U TCPIO:(detach=CHILDSOCK)
  . . N Q S Q=""""
  . . N ARG S ARG=Q_"SOCKET:"_CHILDSOCK_Q
- . . N J S J="CHILD($G(TLSCONFIG),$G(NOGBL),$G(TRACE),$G(USERPASS),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(input="_ARG_":output="_ARG_")"
+ . . N J S J="CHILD($G(TLSCONFIG),$G(NOGBL),$G(TRACE),$G(USERPASS),$G(NOGZIP),$G(CORSENAB),$G(CORSHDRS),$G(CORSMETH),$G(CORSORG),$G(CORSCRED),$G(CORSMXAG)):(input="_ARG_":output="_ARG_")"
  . . J @J
  . ;
  . ; GT.M before 6.1:
@@ -138,7 +138,7 @@ GTMLNX  ;From Linux xinetd script; $P is the main stream
  ; HTTPLOG indicates the logging level for this process
  ; HTTPERR non-zero if there is an error state
  ;
-CHILD(TLSCONFIG,NOGBL,TRACE,USERPASS,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; handle HTTP requests on this connection
+CHILD(TLSCONFIG,NOGBL,TRACE,USERPASS,NOGZIP,CORSENAB,CORSHDRS,CORSMETH,CORSORG,CORSCRED,CORSMXAG) ; handle HTTP requests on this connection
 CHILDDEBUG ; [Internal] Debugging entry point
  S %WTCP=$GET(TCPIO,$PRINCIPAL) ; TCP Device
  S %WOS=$S($P($SY,",")=47:"GT.M",$P($SY,",")=50:"MV1",1:"CACHE") ; Get Mumps Virtual Machine
@@ -291,14 +291,21 @@ ETCODE ; error trap when calling out to routines
  ; Set the error information and write it as the HTTP response.
  I $D(%WNULL) C %WNULL
  U %WTCP
+ N ISGTM S ISGTM=$P($SYSTEM,",")=47
+ N ERRTXT S ERRTXT=$S(ISGTM:$ZSTATUS,1:$ZERROR_"  ($ECODE:"_$ECODE_")")
+ N ERRARR
+ S ERRARR("message")=ERRTXT
+ S ERRARR("reason")=$ECODE
+ S ERRARR("place")=$STACK($STACK(-1),"PLACE")
+ S ERRARR("mcode")=$STACK($STACK(-1),"MCODE")
+ S ERRARR("logID")=HTTPLOG("ID")
+ D:'$G(NOGBL) SETERROR^%webutils(501,,.ERRARR) ; sets HTTPERR
  D LOGERR
- D:'$G(NOGBL) SETERROR^%webutils(501,"Log ID:"_HTTPLOG("ID")) ; sets HTTPERR
  D:'$G(NOGBL) RSPERROR^%webrsp  ; switch to error response
  D SENDATA^%webrsp
- ; Leave $ECODE as non-null so that the error handling continues.
  ; This next line will 'unwind' the stack and got back to listening
  ; for the next HTTP request (goto NEXT).
- S $ETRAP="Q:$ESTACK&$QUIT 0 Q:$ESTACK  S $ECODE="""" G NEXT"
+ S $ETRAP="Q:$ESTACK&$QUIT 0 Q:$ESTACK  S $ECODE="""" G NEXT",$ECODE=",U-UNWIND,"
  Q
 ETDC ; error trap for client disconnect ; not a true M trap
  D:HTTPLOG LOGDC
@@ -385,6 +392,8 @@ LOGERR ; log error information
  ; Works on GT.M and Cache to capture ST.
  S %Y="%" F  M:$D(@%Y) @(%X_"%Y)="_%Y) S %Y=$O(@%Y) Q:%Y=""
  I ISGTM ZSHOW "D":^%webhttp("log",%D,$J,%I,"error","devices")
+ ; If VistA Error Trap exists, log the error there too.
+ I $T(+0^%ZTER)'="" D ^%ZTER
  Q
  ;
 stop ; tell the listener to stop running

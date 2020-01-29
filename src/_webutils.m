@@ -1,4 +1,4 @@
-%webutils ;SLC/KCM -- Utilities for HTTP communications ;Feb 07, 2019@11:07
+%webutils ;SLC/KCM -- Utilities for HTTP communications ;2019-11-14  11:50 AM
  ;
 UP(X) Q $TR(X,"abcdefghijklmnopqrstuvwxyz","ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 LOW(X) Q $TR(X,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")
@@ -140,6 +140,11 @@ setError1 ;
  E  S ^TMP("HTTPERR",$J,1,"error","errors",NEXTERR,"message")=ERRNAME
  I $L($G(MESSAGE)) S ^TMP("HTTPERR",$J,1,"error","errors",NEXTERR,"domain")=MESSAGE
  Q
+customError(ERRCODE,ERRARRAY) ; set custom error into ^TMP("HTTPERR",$J)
+ K ^TMP("HTTPERR",$J)
+ S HTTPERR=ERRCODE
+ M ^TMP("HTTPERR",$J,1)=ERRARRAY
+ QUIT
  ;
  ; Cache specific functions (selected one support GT.M too!)
  ;
@@ -325,6 +330,9 @@ addService(method,urlPattern,routine,auth,authKey,authOption,params) ; [Public: 
  ; if urlPattern or routine are empty, bad call
  if urlPattern=""!(routine="") quit:$q 0 q
  ;
+ ; Remove leading slashes
+ if $e(urlPattern)="/" s $e(urlPattern)=""
+ ;
  ; Lock for edits
  if $P($SY,",")=47 tstart ():serial
  else  lock +^%webutils:1 else  quit:$q 0 q
@@ -374,6 +382,9 @@ deleteService(method,urlPattern) ; [Public: Delete Service]
  set urlPattern=$get(urlPattern)
  if method="" quit
  if urlPattern="" quit
+ ;
+ ; Remove leading slashes
+ if $e(urlPattern)="/" s $e(urlPattern)=""
  ;
  new ien
  if $P($SY,",")=47 tstart ():serial

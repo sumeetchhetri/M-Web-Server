@@ -1,4 +1,4 @@
-%webrsp ;SLC/KCM -- Handle HTTP Response;2019-08-12  4:38 PM
+%webrsp ;SLC/KCM -- Handle HTTP Response;2019-11-14  11:02 AM
  ;
  ; -- prepare and send RESPONSE
  ;
@@ -181,6 +181,8 @@ MATCHF(ROUTINE,ARGS,PARAMS,AUTHNODE) ; Match against a file...
  . ; Loop through patterns. Start with first piece of path. quit if $order took us off the deep end.
  . F  S PATTERN=$O(^%web(17.6001,"B",METHOD,PATTERN)) Q:PATTERN=""  Q:PATH1'=$E(PATTERN,1,$L(PATH1))  D  Q:DONE
  . . ;
+ . . I $E(PATTERN)="/" S PATTERN=$E(PATTERN,2,$L(PATTERN))
+ . . ;
  . . ; TODO: only matches 1st piece then *. Second piece can be different.
  . . N I F I=2:1:$L(PATTERN,"/") D
  . . . N PATTSEG S PATTSEG=$$URLDEC^%webutils($P(PATTERN,"/",I),1) ; pattern Segment url-decoded
@@ -223,6 +225,7 @@ MATCHR(ROUTINE,ARGS) ; Match against this routine
  F SEQ=1:1 S PATTERN=$P($T(URLMAP+SEQ^%weburl),";;",2,99) Q:PATTERN="zzzzz"  D  Q:DONE
  . K ARGS
  . S ROUTINE=$P(PATTERN," ",3),PATMETHOD=$P(PATTERN," "),PATTERN=$P(PATTERN," ",2),FAIL=0
+ . I $E(PATTERN)="/" S PATTERN=$E(PATTERN,2,$L(PATTERN))
  . I $L(PATTERN,"/")'=$L(PATH,"/") S ROUTINE="" Q  ; must have same number segments
  . F I=1:1:$L(PATH,"/") D  Q:FAIL
  . . S PATHSEG=$$URLDEC^%webutils($P(PATH,"/",I),1)
@@ -288,7 +291,7 @@ SENDATA ; write out the data as an HTTP response
  . . D W("Access-Control-Max-Age: "_CORS("maxAge")_$C(13,10))
  . D W("Access-Control-Allow-Origin: "_CORS("origin")_$C(13,10))
  ;
- I $P($SY,",")=47,$G(HTTPREQ("header","accept-encoding"))["gzip" GOTO GZIP  ; If on GT.M, and we can zip, let's do that!
+ I $P($SY,",")=47,'$G(NOGZIP),$G(HTTPREQ("header","accept-encoding"))["gzip" GOTO GZIP  ; If on GT.M, and we can zip, let's do that!
  ;
  D W("Content-Length: "_SIZE_$C(13,10)_$C(13,10))
  I 'SIZE!(HTTPREQ("method")="HEAD") D FLUSH Q  ; flush buffer and quit if empty
@@ -329,8 +332,8 @@ FLUSH ; EP to flush written data
 GZIP ; EP to write gzipped content
  ; Nothing to write?
  I 'SIZE D  QUIT  ; nothing to write!
- . W "Content-Length: 0"_$C(13,10,13,10)
- . W ! ; flush buffer
+ . D W("Content-Length: 0"_$C(13,10,13,10))
+ . D FLUSH
  ;
  ; zip away - Open gzip and write to it, then read back the zipped file.
  N OLDIO S OLDIO=$IO
@@ -390,21 +393,6 @@ RSPLINE() ; writes out a response line based on HTTPERR
  I $G(HTTPERR)=404 Q "HTTP/1.1 404 Not Found"
  I $G(HTTPERR)=405 Q "HTTP/1.1 405 Method Not Allowed"
  Q "HTTP/1.1 500 Internal Server Error"
- ;
-PING(RESULT,ARGS) ; writes out a ping response
- S RESULT="{""status"":"""_$J_" running""}"
- Q
-XML(RESULT,ARGS) ; text XML
- S HTTPRSP("mime")="text/xml"
- S RESULT=$NA(^TMP($J))
- S ^TMP($J,1)="<?xml version=""1.0"" encoding=""UTF-8""?>"
- S ^TMP($J,2)="<note>"
- S ^TMP($J,3)="<to>Tovaniannnn</to>"
- S ^TMP($J,4)="<from>Jani</from>"
- S ^TMP($J,5)="<heading>Reminders</heading>"
- S ^TMP($J,6)="<body>Don't forget me this weekend!</body>"
- S ^TMP($J,7)="</note>"
- QUIT
  ;
 AUTHEN(HTTPAUTH) ; Authenticate User against VISTA from HTTP Authorization Header
  ;
