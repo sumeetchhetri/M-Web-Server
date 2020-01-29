@@ -1066,6 +1066,31 @@ RESPOND ; find entry point to handle request and call it
  ;
  K:'$G(NOGBL) ^TMP($J)
  N ROUTINE,LOCATION,HTTPARGS,HTTPBODY,PARAMS,AUTHNODE
+ ;
+ N BODY M BODY=HTTPREQ("body") K HTTPREQ("body")
+ ;
+ ; Split the query string
+ D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
+ ;
+ ; If method is PUT/POST and we have URL encoded form data then we need to extract the form parameters
+ ; and store them in HTTPARGS, this has been moved out here as this extraction needs to happen only once
+ ; earlier this extraction process was getting repeated per form parameter definition leading to a performance issue
+ N FORMPARAMS
+ I "PUT,POST"[HTTPREQ("method")&($G(HTTPREQ("header","content-type"))["application/x-www-form-urlencoded")&($D(BODY)) D
+ . N CONCATBODY S CONCATBODY=$$BODYASSTR(.BODY)
+ . D QSPLIT(CONCATBODY,.FORMPARAMS)
+ ;
+ ; Hook for execution of any pre-hook functions that need to be executed before the server starts
+ ; processing the web request
+ I ('$G(NOGBL))&($G(^%webhttp(0,"preexecfunc"))'="") D
+ . N r S r=^%webhttp(0,"preexecfunc")_"(.HTTPRSP,.HTTPREQ,.HTTPARGS,.FORMPARAMS)"
+ . D @r K r
+ I $D(HTTPRSP) D
+ . I ('$G(NOGBL))&($G(^%webhttp(0,"autoserresptojson"))="Y") D
+ . . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
+ . . K HTTPRSP M HTTPRSP=TMPHTTPRSP
+ . . S HTTPRSP("mime")="application/json; charset=utf-8"
+ Q:$D(HTTPRSP)
  I HTTPREQ("path")="/",HTTPREQ("method")="GET" D en^%webhome(.HTTPRSP) QUIT  ; Home page requested.
  I HTTPREQ("method")="OPTIONS" S HTTPRSP="OPTIONS,POST" QUIT ; Always repond to OPTIONS to give CORS header info
  ;
@@ -1074,9 +1099,6 @@ RESPOND ; find entry point to handle request and call it
  ;
  I $G(HTTPERR)    QUIT  ; Error in matching
  I $O(HTTPRSP(0)) QUIT  ; File on file system found matching path
- ;
- ; Split the query string
- D QSPLIT(HTTPREQ("query"),.HTTPARGS) I $G(HTTPERR) QUIT
  ;
  ; %WNULL Support for VistA - Use this device to prevent VistA from writing to you.
  N %WNULL S %WNULL=""
@@ -1087,15 +1109,24 @@ RESPOND ; find entry point to handle request and call it
  I %WNULL="" S $EC=",U-OS-NOT-SUPPORTED,"
  O %WNULL U %WNULL
  ;
- N BODY M BODY=HTTPREQ("body") K HTTPREQ("body")
- ;
  ; r will contain the routine to execute
  n r,order
  ;
  ; No parameters, do it the original way
- if '$D(PARAMS) D
- . if "PUT,POST"[HTTPREQ("method") set r=ROUTINE_"(.HTTPARGS,.BODY,.HTTPRSP)"
- . else  set r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ I '$D(PARAMS) D
+ . I "PUT,POST"[HTTPREQ("method") D
+ . . S order="" F  S order=$O(FORMPARAMS(order)) Q:order=""  D
+ . . . S HTTPARGS(order)=FORMPARAMS(order)
+ . . ; Check whether we need to pass HTTPRSP as first argument to thr routine or HTTPARGS
+ . . I ('$G(NOGBL))&($G(^%webhttp(0,"firstargresponse"))="Y") D
+ . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ . . E  S r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
+ . E  D
+ . . I ('$G(NOGBL))&($G(^%webhttp(0,"firstargresponse"))="Y") D
+ . . . S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
+ . . E  D
+ . . . I ROUTINE["$$" S r=ROUTINE_"(.HTTPARGS,.HTTPRSP)"
+ . . . E  S r=ROUTINE_"(.HTTPRSP,.HTTPARGS)"
  ;
  ;
  ; Parameters, do it the new way
@@ -1114,10 +1145,6 @@ RESPOND ; find entry point to handle request and call it
  .. set @("a"_order)=$get(HTTPREQ("header",name))
  .. set r=r_var_","
  . if type="F" do  ; application/x-www-form-urlencoded form
- .. if BODY($order(BODY(0)))="" set HTTPERR=400 quit
- .. if $get(HTTPREQ("header","content-type"))'="application/x-www-form-urlencoded" set HTTPERR=400 quit
- .. new concatBody set concatBody=$$BODYASSTR(.BODY)
- .. new formParams do QSPLIT(concatBody,.formParams)
  .. set @var=$g(formParams(name))
  .. set r=r_var_","
  . if type="B" do  ; whole body
@@ -1126,8 +1153,20 @@ RESPOND ; find entry point to handle request and call it
  . ; replace trailing comma with close paran
  if $extract(r,$l(r))="," set $extract(r,$l(r))=")"
  ;
- if "PUT,POST"[HTTPREQ("method") xecute "S LOCATION=$$"_r if 1
- else  do @r
+ N D,DA,DGVAUSER,DILOCKTM,DISYS,EXPS,IO,IOBS,IOF,IOM,IOSL,IOST,IOST,IOT,K,POP,T,TCPX,TLSCONFIG,TRACE,USERPASS,X,XPARSYS,Y,order
+ I ROUTINE["$$" xecute "S LOCATION="_r
+ E  d @r
+ ;
+ ; if setting for json serialization is enabled then perform auto json serialization for response object
+ I ('$G(NOGBL))&($G(^%webhttp(0,"autoserresptojson"))="Y")&(ROUTINE["$$") D
+ . ; Check whether we have http response status code or any other http headers present in the special _http key
+ . N TMPHTTPR M TMPHTTPR=HTTPRSP("_http")
+ . K HTTPRSP("_http")
+ . K TMPHTTPRSP D encode^%webjson($NA(HTTPRSP),$NA(TMPHTTPRSP),$NA(ERR))
+ . K HTTPRSP M HTTPRSP=TMPHTTPRSP
+ . S HTTPRSP("mime")="application/json; charset=utf-8"
+ . S order=0 F  S order=$O(TMPHTTPR(order)) Q:'order  D
+ . . S HTTPRSP(order)=TMPHTTPR(order)
  ;
  if $get(LOCATION)'="" do
  . S HTTPREQ("location")=$S($D(HTTPREQ("header","host")):HTTPREQ("header","host")_LOCATION,1:LOCATION)
@@ -1146,7 +1185,7 @@ QSPLIT(QPARAMS,QUERY) ; parses and decodes query fragment into array
  F I=1:1:$L(QPARAMS,"&") D
  . S X=$$URLDEC^%webutils($P(QPARAMS,"&",I))
  . S NAME=$P(X,"="),VALUE=$P(X,"=",2,999)
- . I $L(NAME) S QUERY($$LOW^%webutils(NAME))=VALUE
+ . I $L(NAME) S QUERY(NAME)=VALUE
  Q
 BODYASSTR(BODY)
  N BSTR S BSTR=""
@@ -2098,7 +2137,7 @@ LOOP ; wait for connection, spawn process to handle it. GOTO favorite.
  . ;
  . ; We have to stop! When we quit, we go to loop, and we exit at LOOP+1
  . I '$G(NOGBL),$E(^%webhttp(0,"listener"),1,4)="stop" QUIT
- . ;
+ . ; 
  . ; At connection, job off the new child socket to be served away.
  . ; I $P($KEY,"|")="CONNECT" QUIT ; before 6.1
  . I $P($KEY,"|")="CONNECT" D  ; >=6.1
@@ -2222,12 +2261,15 @@ WAIT ; wait for request on this connection
  . I HTTPLOG>2 D LOGBODY
  ;
  N CORS
- S CORS("enabled")=$G(CORSENAB)
- S CORS("credentials")=$G(CORSCRED)
- S CORS("method")=$G(CORSMETH)
- S CORS("header")=$G(CORSHDRS)
- S CORS("origin")=$G(CORSORG)
- S CORS("maxAge")=$G(CORSMXAG)
+ I $G(NOGBL) D
+ . S CORS("enabled")=$G(CORSENAB)
+ . S CORS("credentials")=$G(CORSCRED)
+ . S CORS("method")=$G(CORSMETH)
+ . S CORS("header")=$G(CORSHDRS)
+ . S CORS("origin")=$G(CORSORG)
+ . S CORS("maxAge")=$G(CORSMXAG)
+ E  I $D(^%webhttp(0,"cors")) M CORS=^%webhttp(0,"cors")
+ ;
  ;
  ; -- build response (map path to routine & call, otherwise 404)
  S $ETRAP="G ETCODE^%webreq"
@@ -3599,7 +3641,7 @@ trpc1 ; @TEST Run a VistA RPC w/o authentication - should fail
  d &libcurl.cleanup
  d CHKEQ^%ut(httpStatus,401)
  quit
- ;
+
 trpc2 ; @TEST Run a VistA RPC (requires authentication - ac/vc provided)
  n httpStatus,return
  i $text(^XUS)="" quit  ; VistA not installed
@@ -3906,7 +3948,6 @@ resetURLs ; Reset all the URLs; Called upon start-up
  do addService^%webutils("GET","r/{routine?.1""%25"".32AN}","R^%webapi")
  do addService^%webutils("PUT","r/{routine?.1""%25"".32AN}","PR^%webapi",1,"XUPROGMODE")
  do addService^%webutils("GET","/test/error","ERR^%webapi")
-
  do addService^%webutils("GET","bigoutput","bigoutput^%webapi")
  do addService^%webutils("POST","rpc/{rpc}","RPC^%webapi",1)
  n params s params(1)="U^rpc",params(2)="F^start",params(3)="F^direction",params(4)="B"

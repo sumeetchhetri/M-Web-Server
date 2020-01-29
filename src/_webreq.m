@@ -78,7 +78,7 @@ LOOP ; wait for connection, spawn process to handle it. GOTO favorite.
  . ;
  . ; We have to stop! When we quit, we go to loop, and we exit at LOOP+1
  . I '$G(NOGBL),$E(^%webhttp(0,"listener"),1,4)="stop" QUIT
- . ;
+ . ; 
  . ; At connection, job off the new child socket to be served away.
  . ; I $P($KEY,"|")="CONNECT" QUIT ; before 6.1
  . I $P($KEY,"|")="CONNECT" D  ; >=6.1
@@ -202,12 +202,15 @@ WAIT ; wait for request on this connection
  . I HTTPLOG>2 D LOGBODY
  ;
  N CORS
- S CORS("enabled")=$G(CORSENAB)
- S CORS("credentials")=$G(CORSCRED)
- S CORS("method")=$G(CORSMETH)
- S CORS("header")=$G(CORSHDRS)
- S CORS("origin")=$G(CORSORG)
- S CORS("maxAge")=$G(CORSMXAG)
+ I $G(NOGBL) D
+ . S CORS("enabled")=$G(CORSENAB)
+ . S CORS("credentials")=$G(CORSCRED)
+ . S CORS("method")=$G(CORSMETH)
+ . S CORS("header")=$G(CORSHDRS)
+ . S CORS("origin")=$G(CORSORG)
+ . S CORS("maxAge")=$G(CORSMXAG)
+ E  I $D(^%webhttp(0,"cors")) M CORS=^%webhttp(0,"cors")
+ ;
  ;
  ; -- build response (map path to routine & call, otherwise 404)
  S $ETRAP="G ETCODE^%webreq"

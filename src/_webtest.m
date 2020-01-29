@@ -189,7 +189,7 @@ trpc1 ; @TEST Run a VistA RPC w/o authentication - should fail
  d &libcurl.cleanup
  d CHKEQ^%ut(httpStatus,401)
  quit
- ;
+
 trpc2 ; @TEST Run a VistA RPC (requires authentication - ac/vc provided)
  n httpStatus,return
  i $text(^XUS)="" quit  ; VistA not installed
@@ -496,7 +496,6 @@ resetURLs ; Reset all the URLs; Called upon start-up
  do addService^%webutils("GET","r/{routine?.1""%25"".32AN}","R^%webapi")
  do addService^%webutils("PUT","r/{routine?.1""%25"".32AN}","PR^%webapi",1,"XUPROGMODE")
  do addService^%webutils("GET","/test/error","ERR^%webapi")
-
  do addService^%webutils("GET","bigoutput","bigoutput^%webapi")
  do addService^%webutils("POST","rpc/{rpc}","RPC^%webapi",1)
  n params s params(1)="U^rpc",params(2)="F^start",params(3)="F^direction",params(4)="B"
