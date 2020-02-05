@@ -352,6 +352,8 @@ SENDATA ; write out the data as an HTTP response
  . . . E  I $G(@HTTPRSP),$G(@ORIG),$NA(@HTTPRSP,OL)'=$NA(@ORIG,OL) S HTTPEXIT=1
  . . ; End ~ vertical rewrite
  . . S HTTPRSP=ORIG
+ . ; Kill global after sending. https://github.com/shabiel/M-Web-Server/issues/44
+ . I HTTPRSP'["^XTMP(" K @HTTPRSP
  D FLUSH ; flush buffer
  Q
  ;
@@ -456,7 +458,7 @@ AUTHEN(HTTPAUTH) ; Authenticate User against VISTA from HTTP Authorization Heade
  QUIT 0
  ;
  ; Portions of this code are public domain, but it was extensively modified
- ; Copyright 2013-2019 Sam Habiel
+ ; Copyright 2013-2020 Sam Habiel
  ; Copyright 2018-2019 Christopher Edwards
  ;
  ;Licensed under the Apache License, Version 2.0 (the "License");
