@@ -29,3 +29,9 @@ ENV GTMXC_libcurl "/opt/yottadb/current/plugin/libcurl_ydb_wrapper.xc"
 RUN . /opt/yottadb/current/ydb_env_set && \
     export ydb_routines="/mwebserver/r /data/munit/r $ydb_routines" && \
     mumps -r ^%webtest
+
+COPY run.sh ./
+RUN chmod +x run.sh
+
+CMD ./run.sh
+
