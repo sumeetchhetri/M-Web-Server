@@ -306,6 +306,7 @@ SENDATA ; write out the data as an HTTP response
  ; TODO: Handle 201 responses differently (change simple OK to created)
  ;
  D W($$RSPLINE()_$C(13,10)) ; Status Line (200, 404, etc)
+ D W("Server: M-Web-Server"_$C(13,10)) ; RFC 7231 server line
  D W("Date: "_$$GMT^%webutils_$C(13,10)) ; RFC 1123 date
  I $D(HTTPREQ("location")) D W("Location: "_HTTPREQ("location")_$C(13,10))  ; Response Location
  I $D(HTTPRSP("auth")) D W("WWW-Authenticate: "_HTTPRSP("auth")_$C(13,10)) K HTTPRSP("auth") ; Authentication
@@ -313,6 +314,8 @@ SENDATA ; write out the data as an HTTP response
  I $D(HTTPRSP("mime")) D  ; Stack $TEST for the ELSE below
  . D W("Content-Type: "_HTTPRSP("mime")_$C(13,10)) K HTTPRSP("mime") ; Mime-type
  E  D W("Content-Type: application/json; charset=utf-8"_$C(13,10))
+ I $D(HTTPRSP("headers")) S order="" F  S order=$O(HTTPRSP("headers",order)) Q:order=""  I $G(HTTPRSP("headers",order))'="" D W(order_": "_HTTPRSP("headers",order)_$C(13,10))
+ I $D(HTTPRSP("headers")) K HTTPRSP("headers") 
  ;
  ; Access-Control-Allow-Origin :- specifies either a single origin, which tells browsers to allow that origin to access the resource;
  ;        or else — for requests without credentials — the "*" wildcard, to tell browsers to allow any origin to access the resource

@@ -210,6 +210,8 @@ WAIT ; wait for request on this connection
  . S CORS("origin")=$G(CORSORG)
  . S CORS("maxAge")=$G(CORSMXAG)
  E  I $D(^%webhttp(0,"cors")) M CORS=^%webhttp(0,"cors")
+ I '$G(NOGBL),$G(^%webhttp(0,"NOGZIP")) D
+ . S NOGZIP=^%webhttp(0,"NOGZIP")
  ;
  ;
  ; -- build response (map path to routine & call, otherwise 404)

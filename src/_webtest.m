@@ -482,6 +482,15 @@ NOGBL ; @TEST Test to make sure no globals are used during webserver operations
  quit
 tStop ; @TEST Stop the Server. MUST BE LAST TEST HERE.
  do stop^%webreq
+ d deleteService^%webutils("GET","r/{routine?.1""%25"".32AN}")
+ d deleteService^%webutils("PUT","r/{routine?.1""%25"".32AN}")
+ d deleteService^%webutils("GET","/test/error")
+ d deleteService^%webutils("GET","test/bigoutput")
+ d deleteService^%webutils("GET","test/gloreturn")
+ d deleteService^%webutils("POST","rpc/{rpc}")
+ d deleteService^%webutils("POST","/rpc2/{rpc}")
+ d addService^%webutils("GET","plaintext","plaintext^%techempbenchmark")
+ d addService^%webutils("GET","json","json^%techempbenchmark")
  quit
  ;
  ;

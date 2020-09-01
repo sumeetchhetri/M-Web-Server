@@ -326,14 +326,16 @@ TESTDET ; Open File Error handler
  ;
  ; Load URL handlers
 LOADHAND ;
- do addService^%webutils("GET","r/{routine?.1""%25"".32AN}","R^%webapi")
- do addService^%webutils("PUT","r/{routine?.1""%25"".32AN}","PR^%webapi",1,"XUPROGMODE")
- do addService^%webutils("GET","test/error","ERR^%webapi")
- do addService^%webutils("POST","rpc/{rpc}","RPC^%webapi",1)
- do addService^%webutils("GET","test/bigoutput","bigoutput^%webapi")
- do addService^%webutils("GET","test/gloreturn","gloreturn^%webapi")
- n params s params(1)="U^rpc",params(2)="F^start",params(3)="F^direction",params(4)="B"
- do addService^%webutils("POST","rpc2/{rpc}","rpc2^%webapi",1,"","",.params)
+ ;do addService^%webutils("GET","r/{routine?.1""%25"".32AN}","R^%webapi")
+ ;do addService^%webutils("PUT","r/{routine?.1""%25"".32AN}","PR^%webapi",1,"XUPROGMODE")
+ ;do addService^%webutils("GET","test/error","ERR^%webapi")
+ ;do addService^%webutils("POST","rpc/{rpc}","RPC^%webapi",1)
+ ;do addService^%webutils("GET","test/bigoutput","bigoutput^%webapi")
+ ;do addService^%webutils("GET","test/gloreturn","gloreturn^%webapi")
+ ;n params s params(1)="U^rpc",params(2)="F^start",params(3)="F^direction",params(4)="B"
+ ;do addService^%webutils("POST","rpc2/{rpc}","rpc2^%webapi",1,"","",.params)
+ do addService^%webutils("GET","plaintext","plaintext^%techempbenchmark") 
+ do addService^%webutils("GET","json","json^%techempbenchmark")
  quit
  ;
 HOMEDIR() ; Set ^%webhome (0 = failure; 1 = success)
